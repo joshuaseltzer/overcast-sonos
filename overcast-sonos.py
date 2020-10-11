@@ -1,11 +1,12 @@
 import os
 import logging
 import uuid
+import re
 from overcast import Overcast, utilities
 from pysimplesoap.server import SoapDispatcher, SOAPHandler
 from BaseHTTPServer import HTTPServer
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.ERROR)
 log = logging.getLogger('overcast-sonos')
 
 list_active_episodes_in_root = True
@@ -119,7 +120,7 @@ def getMetadata(id, index, count, recursive=False):
                     'mediaMetadata': {
                         'id': 'episodes/' + episode['id'],
                         'title': episode['podcast_title'] + " - " + episode['title'],
-                        'mimeType': episode['audio_type'],
+                        'mimeType': fixed_metadata_for_episode(episode),
                         'itemType': 'track',
                         'trackMetadata': {
                             'artist': episode['podcast_title'],
@@ -141,7 +142,7 @@ def getMetadata(id, index, count, recursive=False):
                 'mediaMetadata': {
                     'id': 'episodes/' + episode['id'],
                     'title': episode['title'],
-                    'mimeType': episode['audio_type'],
+                    'mimeType': fixed_metadata_for_episode(episode),
                     'itemType': 'track',
                     'trackMetadata': {
                         'artist': episode['podcast_title'],
@@ -177,7 +178,7 @@ def getMetadata(id, index, count, recursive=False):
                 'mediaMetadata': {
                     'id': 'episodes/' + episode['id'],
                     'title': episode['title'],
-                    'mimeType': episode['audio_type'],
+                    'mimeType': fixed_metadata_for_episode(episode),
                     'itemType': 'track',
                     'trackMetadata': {
                         'artist': episode['podcast_title'],
@@ -203,8 +204,19 @@ dispatcher.register_function(
     args={'id': str, 'index': int, 'count': int, 'recursive': bool}
 )
 
-###
+# for some reason, certain podcasts have the incorrect encoding, fix them here manually
+def fixed_metadata_for_episode(episode):
+    title = episode['podcast_title']
+    if title == 'Above & Beyond: Group Therapy':
+	log.debug('Forcing \'audio/mp4\' for the mime_type.')
+        return 'audio/mp4'
+    elif title == 'Monstercat: Call of the Wild':
+        log.debug('Forcing \'audio/mpeg\' for the mime_type..')
+        return 'audio/mpeg'
+    else:
+        return episode['audio_type']
 
+###
 
 def getMediaMetadata(id):
     log.debug('at=getMediaMetadata id=%s', id)
@@ -215,7 +227,7 @@ def getMediaMetadata(id):
         'mediaMetadata': {
             'id': id,
             'title': episode['title'],
-            'mimeType': episode['audio_type'],
+            'mimeType': fixed_metadata_for_episode(episode),
             'itemType': 'track',
             'trackMetadata': {
                 'artist': episode['podcast_title'],
@@ -246,7 +258,7 @@ def getMediaURI(id):
     episode = overcast.get_episode_detail(episode_id)
     parsed_audio_uri = episode['parsed_audio_uri']
     audio_uri = utilities.final_redirect_url(parsed_audio_uri)
-    response = {'getMediaURIResult': audio_uri,
+    response = {'getMediaURIResult': fix_audio_uri_for_episode(episode, audio_uri),
                 'positionInformation': {
                         'id': 'episodes/' + episode['id'],
                         'index': 0,
@@ -262,6 +274,15 @@ dispatcher.register_function(
     returns={'getMediaURIResult': str, 'positionInformation': positionInformation},
     args={'id': str}
 )
+
+# for certain podcasts, the '#t=' part of the URL causes Sonos to fail to connect to the server
+def fix_audio_uri_for_episode(episode, audio_uri):
+    title = episode['podcast_title']
+    if title == 'Euphonic Sessions with Kyau & Albert' or title == 'Scorchin\' Radio - Latest In Progressive & Hybrid Trance':
+        log.debug('Truncating the \'#t=\' part of the audio_uri.')
+	return re.sub('#t=[0-9]*', '', audio_uri)
+    else:
+        return audio_uri
 
 ###
 
