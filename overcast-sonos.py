@@ -211,7 +211,7 @@ def fixed_metadata_for_episode(episode):
 	log.debug('Forcing \'audio/mp4\' for the mime_type.')
         return 'audio/mp4'
     elif title == 'Monstercat: Call of the Wild':
-        log.debug('Forcing \'audio/mpeg\' for the mime_type..')
+        log.debug('Forcing \'audio/mpeg\' for the mime_type.')
         return 'audio/mpeg'
     else:
         return episode['audio_type']
