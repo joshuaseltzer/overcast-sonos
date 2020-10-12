@@ -208,7 +208,7 @@ dispatcher.register_function(
 def fixed_mimetype_for_episode(episode):
     title = episode['podcast_title']
     if title == 'Above & Beyond: Group Therapy':
-	    log.debug('Forcing \'audio/mp4\' for the mime_type.')
+        log.debug('Forcing \'audio/mp4\' for the mime_type.')
         return 'audio/mp4'
     elif title == 'Monstercat: Call of the Wild':
         log.debug('Forcing \'audio/mpeg\' for the mime_type.')
@@ -250,7 +250,6 @@ dispatcher.register_function(
 )
 
 ###
-
 
 def getMediaURI(id):
     log.debug('at=getMediaURI id=%s', id)
