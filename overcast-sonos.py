@@ -279,7 +279,7 @@ def fixed_audio_uri_for_episode(episode, audio_uri):
     title = episode['podcast_title']
     if title == 'Euphonic Sessions with Kyau & Albert' or title == 'Scorchin\' Radio - Latest In Progressive & Hybrid Trance':
         log.debug('Truncating the \'#t=\' part of the audio_uri.')
-	    return re.sub('#t=[0-9]*', '', audio_uri)
+        return re.sub('#t=[0-9]*', '', audio_uri)
     else:
         return audio_uri
 
