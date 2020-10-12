@@ -120,7 +120,7 @@ def getMetadata(id, index, count, recursive=False):
                     'mediaMetadata': {
                         'id': 'episodes/' + episode['id'],
                         'title': episode['podcast_title'] + " - " + episode['title'],
-                        'mimeType': fixed_metadata_for_episode(episode),
+                        'mimeType': fixed_mimetype_for_episode(episode),
                         'itemType': 'track',
                         'trackMetadata': {
                             'artist': episode['podcast_title'],
@@ -142,7 +142,7 @@ def getMetadata(id, index, count, recursive=False):
                 'mediaMetadata': {
                     'id': 'episodes/' + episode['id'],
                     'title': episode['title'],
-                    'mimeType': fixed_metadata_for_episode(episode),
+                    'mimeType': fixed_mimetype_for_episode(episode),
                     'itemType': 'track',
                     'trackMetadata': {
                         'artist': episode['podcast_title'],
@@ -178,7 +178,7 @@ def getMetadata(id, index, count, recursive=False):
                 'mediaMetadata': {
                     'id': 'episodes/' + episode['id'],
                     'title': episode['title'],
-                    'mimeType': fixed_metadata_for_episode(episode),
+                    'mimeType': fixed_mimetype_for_episode(episode),
                     'itemType': 'track',
                     'trackMetadata': {
                         'artist': episode['podcast_title'],
@@ -204,11 +204,11 @@ dispatcher.register_function(
     args={'id': str, 'index': int, 'count': int, 'recursive': bool}
 )
 
-# for some reason, certain podcasts have the incorrect encoding, fix them here manually
-def fixed_metadata_for_episode(episode):
+# for some reason, certain podcasts report the incorrect mime_type, fix them here manually
+def fixed_mimetype_for_episode(episode):
     title = episode['podcast_title']
     if title == 'Above & Beyond: Group Therapy':
-	log.debug('Forcing \'audio/mp4\' for the mime_type.')
+	    log.debug('Forcing \'audio/mp4\' for the mime_type.')
         return 'audio/mp4'
     elif title == 'Monstercat: Call of the Wild':
         log.debug('Forcing \'audio/mpeg\' for the mime_type.')
@@ -227,7 +227,7 @@ def getMediaMetadata(id):
         'mediaMetadata': {
             'id': id,
             'title': episode['title'],
-            'mimeType': fixed_metadata_for_episode(episode),
+            'mimeType': fixed_mimetype_for_episode(episode),
             'itemType': 'track',
             'trackMetadata': {
                 'artist': episode['podcast_title'],
@@ -258,7 +258,7 @@ def getMediaURI(id):
     episode = overcast.get_episode_detail(episode_id)
     parsed_audio_uri = episode['parsed_audio_uri']
     audio_uri = utilities.final_redirect_url(parsed_audio_uri)
-    response = {'getMediaURIResult': fix_audio_uri_for_episode(episode, audio_uri),
+    response = {'getMediaURIResult': fixed_audio_uri_for_episode(episode, audio_uri),
                 'positionInformation': {
                         'id': 'episodes/' + episode['id'],
                         'index': 0,
@@ -275,12 +275,12 @@ dispatcher.register_function(
     args={'id': str}
 )
 
-# for certain podcasts, the '#t=' part of the URL causes Sonos to fail to connect to the server
-def fix_audio_uri_for_episode(episode, audio_uri):
+# for certain podcasts, the '#t=' part of the URL causes Sonos to fail to connect to the server, fix those here
+def fixed_audio_uri_for_episode(episode, audio_uri):
     title = episode['podcast_title']
     if title == 'Euphonic Sessions with Kyau & Albert' or title == 'Scorchin\' Radio - Latest In Progressive & Hybrid Trance':
         log.debug('Truncating the \'#t=\' part of the audio_uri.')
-	return re.sub('#t=[0-9]*', '', audio_uri)
+	    return re.sub('#t=[0-9]*', '', audio_uri)
     else:
         return audio_uri
 
