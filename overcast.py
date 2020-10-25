@@ -13,7 +13,6 @@ import threading
 
 log = logging.getLogger('overcast-sonos')
 
-
 class Overcast(object):
 
     def __init__(self, email, password):
@@ -25,7 +24,7 @@ class Overcast(object):
             raise Exception("Can't login: {}".format(alert[0].text_content().strip()))
 
     def _get_html(self, url):
-        return lxml.html.fromstring(self.session.get(url).content)
+        return lxml.html.fromstring(self.session.get(url).content.replace('\n', '').replace('                    ', '').replace('                ', ''))
 
     def get_active_episodes(self, get_details=False):
         active_episodes = []
@@ -42,13 +41,13 @@ class Overcast(object):
                 else:
                     active_episodes.append({
                         'id': urlparse.urljoin('https://overcast.fm', cell.attrib['href']).lstrip('/'),
-                        'title': cell.cssselect('div.titlestack div.title')[0].text_content(),
+                        'title': cell.cssselect('div.titlestack div.caption2')[0].text_content(),
                         'audio_type': 'audio/mpeg',
-                        'podcast_title': cell.cssselect('div.titlestack div.caption2')[0].text_content(),
+                        'podcast_title': cell.cssselect('div.titlestack div.title')[0].text_content(),
                         'albumArtURI': cell.cssselect('img')[0].attrib['src'],
                         'duration': -1,
                     })
-    
+
         main_thread = threading.currentThread()
         for t in threading.enumerate():
             if t is not main_thread:
@@ -66,6 +65,7 @@ class Overcast(object):
     def get_episode_detail(self, episode_id, time_remaining_seconds=None):
         episode_href = urlparse.urljoin('https://overcast.fm', episode_id)
         doc = self._get_html(episode_href)
+        print(doc)
 
         time_elapsed_seconds = int(doc.cssselect('audio#audioplayer')[0].attrib['data-start-time'])
         time_remaining_seconds = time_remaining_seconds or self.get_episode_time_remaining_seconds(episode_id, doc)
@@ -99,7 +99,7 @@ class Overcast(object):
 
     def get_episode_time_remaining_seconds_from_episode_cell(self, cell, is_extended_cell):
         unparsed_time_remaining_index = 1 if is_extended_cell else 2
-        unparsed_time_remaining = cell.cssselect('div.singleline')[unparsed_time_remaining_index].text_content()
+        unparsed_time_remaining = cell.cssselect('div.titlestack div.caption2')[0].text_content()
         time_remaining_seconds = utilities.duration_in_seconds(unparsed_time_remaining)
         return time_remaining_seconds
 

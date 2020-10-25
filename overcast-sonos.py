@@ -6,12 +6,13 @@ from overcast import Overcast, utilities
 from pysimplesoap.server import SoapDispatcher, SOAPHandler
 from BaseHTTPServer import HTTPServer
 
+#logging.basicConfig(level=logging.DEBUG)
 logging.basicConfig(level=logging.ERROR)
 log = logging.getLogger('overcast-sonos')
 
 list_active_episodes_in_root = True
 allow_all_active_episodes_as_playlist = True
-
+default_album_art_uri = 'http://is3.mzstatic.com/image/thumb/Purple111/v4/20/5b/5e/205b5ef7-ee0e-7d0c-2d11-12f611c579f4/source/175x175bb.jpg'
 
 class customSOAPHandler(SOAPHandler):
 
@@ -101,7 +102,7 @@ def getMetadata(id, index, count, recursive=False):
                 'title': 'Podcasts',
                 'itemType': 'albumList',
                 'canPlay': False,
-                'albumArtURI': 'http://is3.mzstatic.com/image/thumb/Purple111/v4/20/5b/5e/205b5ef7-ee0e-7d0c-2d11-12f611c579f4/source/175x175bb.jpg',
+                'albumArtURI': default_album_art_uri,
             }})
         response['getMetadataResult'].append(
                 {'mediaCollection': {
@@ -109,7 +110,7 @@ def getMetadata(id, index, count, recursive=False):
                     'title': 'All Active Episodes',
                     'itemType': 'playlist',
                     'canPlay': allow_all_active_episodes_as_playlist,
-                    'albumArtURI': 'http://is3.mzstatic.com/image/thumb/Purple111/v4/20/5b/5e/205b5ef7-ee0e-7d0c-2d11-12f611c579f4/source/175x175bb.jpg',
+                    'albumArtURI': default_album_art_uri,
                 }})
         if list_active_episodes_in_root:
             all_episodes = overcast.get_active_episodes()
