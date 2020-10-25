@@ -98,7 +98,7 @@ class Overcast(object):
                 return self.get_episode_time_remaining_seconds_from_episode_cell(cell, True)
 
     def get_episode_time_remaining_seconds_from_episode_cell(self, cell, is_extended_cell):
-        unparsed_time_remaining_index = 1 if is_extended_cell else 2
+        #unparsed_time_remaining_index = 1 if is_extended_cell else 2
         unparsed_time_remaining = cell.cssselect('div.titlestack div.caption2')[0].text_content()
         time_remaining_seconds = utilities.duration_in_seconds(unparsed_time_remaining)
         return time_remaining_seconds
