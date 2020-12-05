@@ -65,7 +65,6 @@ class Overcast(object):
     def get_episode_detail(self, episode_id, time_remaining_seconds=None):
         episode_href = urlparse.urljoin('https://overcast.fm', episode_id)
         doc = self._get_html(episode_href)
-        print(doc)
 
         time_elapsed_seconds = int(doc.cssselect('audio#audioplayer')[0].attrib['data-start-time'])
         time_remaining_seconds = time_remaining_seconds or self.get_episode_time_remaining_seconds(episode_id, doc)

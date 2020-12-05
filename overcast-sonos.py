@@ -306,7 +306,7 @@ def reportPlaySeconds(id, seconds, offsetMillis, contextId):
     log.debug('at=reportPlaySeconds and id=%s, seconds=%d, offsetMillis=%d, contextId=%s, episode_id=%s', id, seconds, offsetMillis, contextId, episode_id)
     episode = overcast.get_episode_detail(episode_id)
     overcast.update_episode_offset(episode, offsetMillis/1000)
-    return {'reportPlaySecondsResult': {'interval': 30}}
+    return {'reportPlaySecondsResult': {'interval': 120}}
 
 
 dispatcher.register_function(
