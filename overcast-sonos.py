@@ -211,7 +211,7 @@ def fixed_mimetype_for_episode(episode):
     if title == 'Above & Beyond: Group Therapy' and 'Group Therapy Radio' in episode['title']:
         log.debug('Forcing \'audio/mp4\' for the mime_type.')
         return 'audio/mp4'
-    elif title == 'Monstercat: Call of the Wild':
+    elif title == 'Monstercat: Call of the Wild' or title == 'Monstercat Silk Showcase':
         log.debug('Forcing \'audio/mpeg\' for the mime_type.')
         return 'audio/mpeg'
     else:
@@ -278,7 +278,7 @@ dispatcher.register_function(
 # for certain podcasts, the '#t=' part of the URL causes Sonos to fail to connect to the server, fix those here
 def fixed_audio_uri_for_episode(episode, audio_uri):
     title = episode['podcast_title']
-    if title == 'Euphonic Sessions with Kyau & Albert' or title == 'Scorchin\' Radio - Latest In Progressive & Hybrid Trance':
+    if title == 'Euphonic Sessions with Kyau & Albert' or title == 'Scorchin\' Radio - Latest In Progressive & Hybrid Trance' or title == 'Monstercat Silk Showcase':
         log.debug('Truncating the \'#t=\' part of the audio_uri.')
         return re.sub('#t=[0-9]*', '', audio_uri)
     else:
