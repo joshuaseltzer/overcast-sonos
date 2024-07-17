@@ -3,3 +3,4 @@ lxml>=4.3.0
 PySimpleSOAP==1.16.2
 requests>=2.19.0
 wheel==0.36.2
+schedule==1.2.2

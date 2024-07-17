@@ -24,7 +24,7 @@ class Overcast(object):
         doc = lxml.html.fromstring(r.content)
         alert = doc.cssselect('div.alert')
         if alert:
-            raise Exception("Can't login: {}".format(alert[0].text_content().strip()))
+            raise Exception(f"Can't login: {alert[0].text_content().strip()}")
 
     def _get_html(self, url):
         return lxml.html.fromstring(self.session.get(url).content)
@@ -173,10 +173,16 @@ class Overcast(object):
 
     def update_episode_offset(self, episode, updated_offset_seconds):
         log.debug("updated_offset_seconds = %d and duration = %d", updated_offset_seconds, episode['duration'])
+        
         url = 'https://overcast.fm/podcasts/set_progress/' + episode['data_item_id']
-        params = {'p': updated_offset_seconds, 'speed': 0, 'v': episode['data_sync_version']}
+        params = {
+            'p': updated_offset_seconds,
+            'speed': 0,
+            'v': episode['data_sync_version']
+        }
         log.debug('Updating offset of episode with id %s to %d', episode['id'], updated_offset_seconds)
         self.session.post(url, params)
+
         # Remove episode if less than 60 seconds remaining - due to Overcast not giving us accurate episode lengths we have to do this
         # or we end up with finished episodes still showing in the list
         if updated_offset_seconds >= (episode['duration'] - 60):

@@ -4,6 +4,7 @@ After=multi-user.target network-online.target
 
 [Service]
 Type=simple
+WorkingDirectory=/home/pi/overcast-sonos
 ExecStart=/home/pi/overcast-sonos/venv/bin/python /home/pi/overcast-sonos/overcast-sonos.py
 EnvironmentFile=/home/pi/overcast-sonos/overcast-sonos_service.conf
 User=pi

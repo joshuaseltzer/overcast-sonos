@@ -7,9 +7,17 @@ Little utility functions to help you along :)
 import requests
 import logging
 import re
+import os
+import shutil
+import unicodedata
+import urllib.parse
 from datetime import datetime
 
+
 log = logging.getLogger('overcast-sonos')
+
+INVALID_HOSTS = ['dcs.megaphone.fm']
+
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
 def duration_in_seconds(str):
@@ -31,10 +39,10 @@ def duration_in_seconds(str):
 
 # Works out the final URL for those podcast platforms that redirect to another URL
 # If the redirected URL has a #t= timecode in it, we remove this as the Sonos player can't play these back, and it fixes compatibility with requests 2.19 and higher
-def final_redirect_url(url):
+def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir):
     redirected_url = requests.head(url, allow_redirects=True).url
     if url != redirected_url:
-        log.debug('''Redirected url '%s' to '%s'.''', url, redirected_url)
+        log.debug(f'Redirected url {url} to {redirected_url}')
 
     # for certain podcasts, the '#=' is added to the audio URL which causes Sonos to fail to connect
     regex='#t=[0-9]*$'
@@ -42,11 +50,28 @@ def final_redirect_url(url):
         log.debug('Truncating the \'#t=\' part of the audio URL.')
         redirected_url = re.sub(regex, '', redirected_url)
 
-    #if '?' in redirected_url:
-    #    redirected_url = redirected_url.split('?')[0]
-    #    log.debug('Removing the query parameters from the audio URL.')
+    # Check the hostname for any invalid hosts (i.e. ones that do not play correctly on Sonos).
+    # If an invalid host is found and local server information is provided, download the file directly to the system
+    # and then return that URL for Sonos to stream from.
+    parsed_url = urllib.parse.urlparse(redirected_url)
+    if parsed_url.hostname in INVALID_HOSTS:
+        log.info(f'"{podcast_title}" is hosted from a URL which will refuse to play on Sonos ({redirect_hostname}).')
+
+        # if local parameters were given, attempt to download and host the podcast directly from this server
+        file_ext = os.path.splitext(parsed_url.path)[1]
+        if file_ext != '' and local_ip and local_port and local_download_dir_full_path:
+            # get a valid file path for the file as it will be downloaded locally to this server
+            local_file_path = os.path.join(slugify(podcast_title), f'{slugify(title)}{file_ext}')
+            full_file_path = os.path.join(local_download_dir, local_file_path)
+            if not os.path.exists(full_file_path):
+                # since the file does not exist locally, download it now
+                download_file(redirected_url, full_file_path)
+
+            # create the URL that will be used to host this podcast file
+            redirected_url = f'http://{local_ip}:{local_port}/{local_file_path}'
 
     return redirected_url
+
 
 # Turns a string like 'Dec 2, 2020 • 171 min' or 'Jan 13 • 147 min' into a date
 # Sets a default date in case it can't parse it of 2000-01-01
@@ -69,3 +94,31 @@ def convert_release_date(str):
         pass
 
     return final_date
+
+
+# Taken from https://github.com/django/django/blob/main/django/utils/text.py
+def slugify(value, allow_unicode=False):
+    """
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or repeated
+    dashes to single dashes. Remove characters that aren't alphanumerics,
+    underscores, or hyphens. Convert to lowercase. Also strip leading and
+    trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize("NFKC", value)
+    else:
+        value = (
+            unicodedata.normalize("NFKD", value)
+            .encode("ascii", "ignore")
+            .decode("ascii")
+        )
+    value = re.sub(r"[^\w\s-]", "", value.lower())
+    return re.sub(r"[-\s]+", "-", value).strip("-_")
+
+
+# Modified solution from https://stackoverflow.com/a/39217788/1102981
+def download_file(url, local_filename):
+    with requests.get(url, stream=True) as r:
+        with open(local_filename, 'wb') as f:
+            shutil.copyfileobj(r.raw, f)
