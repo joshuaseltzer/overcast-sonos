@@ -1,13 +1,13 @@
 import os
 import logging
 import uuid
-import time
 import schedule
+import http
+from RangeHTTPServer import RangeRequestHandler
 from threading import Thread
-from pathlib import Path
 from overcast import Overcast, utilities
 from pysimplesoap.server import SoapDispatcher, SOAPHandler
-from http.server import HTTPServer, SimpleHTTPRequestHandler
+from http.server import HTTPServer, ThreadingHTTPServer
 
 
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +55,7 @@ class CustomSOAPHandler(SOAPHandler):
             return SOAPHandler.do_GET(self)
 
 
-class CustomHTTPRequestHandler(SimpleHTTPRequestHandler):
+class CustomRangeRequestHandler(RangeRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=OVERCAST_LOCAL_DOWNLOAD_DIR, **kwargs)
 
@@ -113,25 +113,8 @@ mediaMetadata = {
 # starts a local server instance to host podcast files directly
 def start_local_server():
     log.info(f"Creating server accessible from {OVERCAST_LOCAL_HOST_IP}:{OVERCAST_LOCAL_PORT} to host files from {OVERCAST_LOCAL_DOWNLOAD_DIR}")
-    server = HTTPServer(("", OVERCAST_LOCAL_PORT), CustomHTTPRequestHandler)
+    server = ThreadingHTTPServer(("", OVERCAST_LOCAL_PORT), CustomRangeRequestHandler)
     server.serve_forever()
-
-
-# cleans up the given directory by removing any files older than the specified days
-def cleanup_directory(directory, keep_for_days):
-    log.info(f"Cleaning directory {directory} by deleting files over {keep_for_days} days old")
-
-    cutoff_time = time.time() - (keep_for_days * 86400)
-    for file in list(Path(directory).rglob("*")):
-        if not file.is_file():
-            continue
-
-        if file.stat().st_ctime < cutoff_time:
-            log.info(f"Removing old file: {file}")
-            try:
-                file.unlink()
-            except Exception:
-                log.error(f"Could not delete file: {file}")
 
 
 # returns a media collection object for a podcast entry
@@ -502,8 +485,8 @@ if __name__ == '__main__':
         Thread(target=start_local_server).start()
 
         # perform a cleanup on the local directory and schedule a daily cleanup
-        cleanup_directory(directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
-        schedule.every().day.at('02:00').do(cleanup_directory, directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
+        utilities.cleanup_directory(directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
+        schedule.every().day.at('02:00').do(utilities.cleanup_directory, directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
 
     # start the main Soap server
     httpd = HTTPServer(("", OVERCAST_SONOS_PORT), CustomSOAPHandler)

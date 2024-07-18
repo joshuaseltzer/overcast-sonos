@@ -79,7 +79,8 @@ class Overcast(object):
                     'albumArtURI': doc.cssselect('div.fullart_container img')[0].attrib['src'],
                     'parsed_audio_uri': audioplayer_source[0].attrib['src'],
                     'audio_type': audioplayer_source[0].attrib['type'],
-                    'delete_episode_uri': doc.cssselect('a#delete_episode_button')[0].attrib['href']
+                    'delete_episode_uri': doc.cssselect('a#delete_episode_button')[0].attrib['href'],
+                    'data-saved-for-user': int(audioplayer[0].attrib['data-saved-for-user'])
                 }
         
         # add the episode to the cache
@@ -173,23 +174,24 @@ class Overcast(object):
     def update_episode_offset(self, episode, updated_offset_seconds):
         log.debug(f"updated_offset_seconds = {updated_offset_seconds} and duration = {episode['duration']}")
         
-        url = urllib.parse.urljoin(HOSTNAME, '/podcasts/set_progress/', episode.get('data_item_id'))
-        params = {
-            'p': updated_offset_seconds,
-            'speed': 0,
-            'v': episode.get('data_sync_version')
-        }
-        log.debug(f"Updating offset of episode with id {episode['id']} to {updated_offset_seconds}")
-        self.session.post(url, params)
+        if episode.get('data-saved-for-user', 0) == 1:
+            url = urllib.parse.urljoin(HOSTNAME, f"/podcasts/set_progress/{episode.get('data_item_id', '')}")
+            params = {
+                'p': updated_offset_seconds,
+                'speed': 0,
+                'v': episode.get('data_sync_version')
+            }
+            log.debug(f"Updating offset of episode with id {episode['id']} to {updated_offset_seconds}")
+            self.session.post(url, params)
 
-        # Remove episode if less than 60 seconds remaining - due to Overcast not giving us accurate episode lengths we have to do this
-        # or we end up with finished episodes still showing in the list
-        if updated_offset_seconds >= (episode.get('duration', -1) - 60):
-            self.delete_episode(episode)
+            # Remove episode if less than 60 seconds remaining - due to Overcast not giving us accurate episode lengths we have to do this
+            # or we end up with finished episodes still showing in the list
+            if updated_offset_seconds >= (episode.get('duration', -1) - 60):
+                self.delete_episode(episode)
 
     def delete_episode(self, episode):
         delete_episode_uri = episode.get('delete_episode_uri')
         if delete_episode_uri:
             url = urllib.parse.urljoin(HOSTNAME, delete_episode_uri)
-            log.debug(f'Deleting episode with id {episode['id']}',)
+            log.debug(f"Deleting episode with id {episode['id']}")
             self.session.post(url)

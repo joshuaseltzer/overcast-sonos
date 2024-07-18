@@ -9,8 +9,10 @@ import logging
 import re
 import os
 import shutil
+import time
 import unicodedata
 import urllib.parse
+from pathlib import Path
 from datetime import datetime
 
 
@@ -98,6 +100,28 @@ def convert_release_date(str):
         pass
 
     return final_date
+
+
+# cleans up the given directory by removing any files older than the specified days
+def cleanup_directory(directory, keep_for_days):
+    log.info(f"Cleaning directory {directory} by deleting files over {keep_for_days} days old")
+
+    cutoff_time = time.time() - (keep_for_days * 86400)
+    for file in list(Path(directory).rglob("*")):
+        if not file.is_file():
+            continue
+
+        if os.path.getmtime(file) < cutoff_time:
+            log.info(f"Deleting old file: {file}")
+            try:
+                file.unlink()
+
+                # attempt to delete the parent directory if the directory is now empty
+                if file.parent.is_dir() and len(os.listdir(file.parent)) == 0:
+                    file.parent.rmdir()
+                    log.info(f"Removing empty directory: {file.parent}")
+            except Exception:
+                log.error(f"Could not delete file: {file}")
 
 
 # Taken from https://github.com/django/django/blob/main/django/utils/text.py
