@@ -5,8 +5,8 @@ from overcast import Overcast, utilities
 from pysimplesoap.server import SoapDispatcher, SOAPHandler
 from http.server import HTTPServer
 
-logging.basicConfig(level=logging.INFO)
-#logging.basicConfig(level=logging.DEBUG)
+#logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 log = logging.getLogger('overcast-sonos')
 
@@ -62,6 +62,11 @@ mediaCollection = {'id': str,
                    'canAddToFavorites': bool,
                    'canScroll': bool,
                    'canSkip': bool}
+
+httpHeader = {'header': str,
+	      'value': str}
+
+httpHeaders = [{'httpHeader': httpHeader}]
 
 positionInformation = {'id': str,
                        'index': int,  # always 0, "reserved for future use" by Sonos
@@ -248,21 +253,46 @@ def getMediaURI(id):
     _, episode_id = id.rsplit('/', 1)
     episode = overcast.get_episode_detail(episode_id)
     parsed_audio_uri = episode['parsed_audio_uri']
-    audio_uri = utilities.final_redirect_url(parsed_audio_uri)
-    response = {'getMediaURIResult': audio_uri,
-                'positionInformation': {
-                        'id': 'episodes/' + episode['id'],
-                        'index': 0,
-                        'offsetMillis': episode['offsetMillis']
-                    },
-                }
+    (audio_uri, redirect_headers) = utilities.final_redirect_url(parsed_audio_uri)
+    headers = [
+        {
+            'httpHeader': {   
+                'header': 'Referer',
+                'value': 'https://overcast.fm/'
+            }
+        },  
+        {
+            'httpHeader': {
+                'header': 'UserAgent',
+                'value': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+            }
+        }
+    ]
+    #for header_name in redirect_headers:
+    #    if header_name == 'X-Megaphone-Payload' or header_name == 'X-Megaphone-Payload-2' or header_name == 'X-Request-Id':
+    #        headers.append({
+    #            'httpHeader': {
+    #                'header': header_name,
+    #                'value': redirect_headers[header_name]
+    #            }
+    #        })
+
+    response = {
+        'getMediaURIResult': audio_uri,
+        'positionInformation': {
+            'id': 'episodes/' + episode['id'],
+            'index': 0,
+            'offsetMillis': episode['offsetMillis']
+        },
+        'httpHeaders': headers
+    }
     log.debug('at=getMediaURI response=%s', response)
     return response
 
 
 dispatcher.register_function(
     'getMediaURI', getMediaURI,
-    returns={'getMediaURIResult': str, 'positionInformation': positionInformation},
+    returns={'getMediaURIResult': str, 'positionInformation': positionInformation, 'httpHeaders': httpHeaders},
     args={'id': str}
 )
 
