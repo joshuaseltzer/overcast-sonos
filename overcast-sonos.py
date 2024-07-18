@@ -2,6 +2,7 @@ import os
 import logging
 import uuid
 import time
+import schedule
 from threading import Thread
 from pathlib import Path
 from overcast import Overcast, utilities
@@ -20,9 +21,9 @@ PODCAST_ID_PREFIX = 'podcast'
 REPORT_PLAY_SECONDS_INTERVAL = 30
 
 # grab some variables from the environment variables
+OVERCAST_SONOS_PORT = int(os.environ.get('OVERCAST_SONOS_PORT', 8140))
 OVERCAST_USERNAME = os.environ.get('OVERCAST_USERNAME')
 OVERCAST_PASSWORD = os.environ.get('OVERCAST_PASSWORD')
-OVERCAST_SONOS_PORT = int(os.environ.get('OVERCAST_SONOS_PORT', 8140))
 OVERCAST_LOCAL_HOST_IP = os.environ.get('OVERCAST_LOCAL_HOST_IP')
 OVERCAST_LOCAL_PORT = int(os.environ.get('OVERCAST_LOCAL_PORT', 8080))
 OVERCAST_LOCAL_DOWNLOAD_DIR = os.environ.get('OVERCAST_LOCAL_DOWNLOAD_DIR', 'podcasts')
@@ -111,7 +112,7 @@ mediaMetadata = {
 
 # starts a local server instance to host podcast files directly
 def start_local_server():
-    log.info(f'Creating local server (accessible from {OVERCAST_LOCAL_HOST_IP}) to host podcast files from {OVERCAST_LOCAL_DOWNLOAD_DIR} on port {OVERCAST_LOCAL_PORT}.')
+    log.info(f'Creating local server (accessible from {OVERCAST_LOCAL_HOST_IP}:{OVERCAST_LOCAL_PORT}) to host podcast files from {OVERCAST_LOCAL_DOWNLOAD_DIR} on port.')
     server = HTTPServer(("", OVERCAST_LOCAL_PORT), CustomHTTPRequestHandler)
     server.serve_forever()
 
@@ -129,7 +130,7 @@ def cleanup_directory(directory, keep_for_days):
             log.info(f'Removing old file "{file}."')
             try:
                 file.unlink()
-            except Exception
+            except Exception:
                 log.error(f'Could not delete "{file}."')
 
 

@@ -55,20 +55,24 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
     # and then return that URL for Sonos to stream from.
     parsed_url = urllib.parse.urlparse(redirected_url)
     if parsed_url.hostname in INVALID_HOSTS:
-        log.info(f'"{podcast_title}" is hosted from a URL which will refuse to play on Sonos ({redirect_hostname}).')
+        log.info(f'"{podcast_title}" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname}).')
 
         # if local parameters were given, attempt to download and host the podcast directly from this server
         file_ext = os.path.splitext(parsed_url.path)[1]
-        if file_ext != '' and local_ip and local_port and local_download_dir_full_path:
+        if file_ext != '' and local_ip and local_port and local_download_dir:
             # get a valid file path for the file as it will be downloaded locally to this server
-            local_file_path = os.path.join(slugify(podcast_title), f'{slugify(title)}{file_ext}')
-            full_file_path = os.path.join(local_download_dir, local_file_path)
+            podcast_dir = slugify(podcast_title)
+            filename = f'{slugify(title)}{file_ext}'
+            file_dir = os.path.join(local_download_dir, podcast_dir)
+            full_file_path = os.path.join(file_dir, filename)
             if not os.path.exists(full_file_path):
                 # since the file does not exist locally, download it now
+                os.makedirs(file_dir, exist_ok=True)
+                log.info(f'Downloading podcast to "{full_file_path}" from {redirected_url}.')
                 download_file(redirected_url, full_file_path)
 
             # create the URL that will be used to host this podcast file
-            redirected_url = f'http://{local_ip}:{local_port}/{local_file_path}'
+            redirected_url = f'http://{local_ip}:{local_port}/{podcast_dir}/{filename}'
 
     return redirected_url
 
