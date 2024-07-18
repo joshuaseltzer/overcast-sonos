@@ -104,7 +104,7 @@ def convert_release_date(str):
 
 # cleans up the given directory by removing any files older than the specified days
 def cleanup_directory(directory, keep_for_days):
-    log.info(f"Cleaning directory {directory} by deleting files over {keep_for_days} days old")
+    log.info(f"Cleaning directory \"{directory}\" by deleting files over {keep_for_days} days old")
 
     cutoff_time = time.time() - (keep_for_days * 86400)
     for file in list(Path(directory).rglob("*")):
