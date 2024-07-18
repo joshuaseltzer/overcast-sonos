@@ -20,20 +20,20 @@ INVALID_HOSTS = ['dcs.megaphone.fm']
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
-def duration_in_seconds(str):
+def duration_in_seconds(duration_str):
     seconds = -1
     try:
-        strings = str.split()
+        strings = duration_str.split()
         if 'at' in strings:
-            log.debug('Duration could not be determined because Overcast is giving the start time instead of time left')
+            log.debug("Duration could not be determined because Overcast is giving the start time instead of time left")
             return seconds
         else:
             minuteIndex = strings.index('min') - 1
             seconds = int(strings[minuteIndex]) * 60
-            log.debug('''Parsed the episode's duration in seconds from the string %s -> %d''', str, seconds)
+            log.debug(f"Parsed the episode's duration in seconds from the string {duration_str} -> {seconds}")
             return seconds
     except:
-        log.debug('''Couldn't parse the episode's duration in seconds from the string %s.''', str)
+        log.debug(f"Couldn't parse the episode's duration in seconds from the string {duration_str}")
         return seconds
 
 
@@ -42,12 +42,12 @@ def duration_in_seconds(str):
 def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir):
     redirected_url = requests.head(url, allow_redirects=True).url
     if url != redirected_url:
-        log.debug(f'Redirected url {url} to {redirected_url}')
+        log.debug(f"Redirected url {url} to {redirected_url}")
 
     # for certain podcasts, the '#=' is added to the audio URL which causes Sonos to fail to connect
     regex='#t=[0-9]*$'
     if re.search(regex, redirected_url):
-        log.debug('Truncating the \'#t=\' part of the audio URL.')
+        log.debug("Truncating the #t= part of the audio URL")
         redirected_url = re.sub(regex, '', redirected_url)
 
     # Check the hostname for any invalid hosts (i.e. ones that do not play correctly on Sonos).
@@ -55,7 +55,7 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
     # and then return that URL for Sonos to stream from.
     parsed_url = urllib.parse.urlparse(redirected_url)
     if parsed_url.hostname in INVALID_HOSTS:
-        log.info(f'"{podcast_title}" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname}).')
+        log.info(f"\"{podcast_title}\" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname})")
 
         # if local parameters were given, attempt to download and host the podcast directly from this server
         file_ext = os.path.splitext(parsed_url.path)[1]
@@ -68,11 +68,11 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
             if not os.path.exists(full_file_path):
                 # since the file does not exist locally, download it now
                 os.makedirs(file_dir, exist_ok=True)
-                log.info(f'Downloading podcast to "{full_file_path}" from {redirected_url}.')
+                log.info(f"Downloading podcast to {full_file_path} from {redirected_url}")
                 download_file(redirected_url, full_file_path)
 
             # create the URL that will be used to host this podcast file
-            redirected_url = f'http://{local_ip}:{local_port}/{podcast_dir}/{filename}'
+            redirected_url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
 
     return redirected_url
 

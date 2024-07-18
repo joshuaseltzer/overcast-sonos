@@ -32,7 +32,7 @@ OVERCAST_LOCAL_KEEP_FOR_DAYS = int(os.environ.get('OVERCAST_LOCAL_KEEP_FOR_DAYS'
 
 class CustomSOAPHandler(SOAPHandler):
     def do_GET(self):
-        log.debug('PATH ==> %s', self.path)
+        log.debug(f"PATH ==> {self.path}")
         if self.path == '/presentation_map':
             self.send_response(http.HTTPStatus.OK)
             self.send_header('Content-type', 'text/xml')
@@ -49,7 +49,7 @@ class CustomSOAPHandler(SOAPHandler):
                 </PresentationMap>
             </Presentation>
             '''.encode("utf-8"))
-            log.info('PresentationMap has been sent.')
+            log.info("PresentationMap has been sent")
             return
         else:
             return SOAPHandler.do_GET(self)
@@ -63,7 +63,7 @@ class CustomHTTPRequestHandler(SimpleHTTPRequestHandler):
 # the dispatcher which is responsible for sending the Soap payloads
 dispatcher = SoapDispatcher(
     'overcast-sonos',
-    location=f'http://localhost:{OVERCAST_SONOS_PORT}/',
+    location=f"http://localhost:{OVERCAST_SONOS_PORT}/",
     namespace='http://www.sonos.com/Services/1.1',
     trace=True,
     debug=True
@@ -112,14 +112,14 @@ mediaMetadata = {
 
 # starts a local server instance to host podcast files directly
 def start_local_server():
-    log.info(f'Creating local server (accessible from {OVERCAST_LOCAL_HOST_IP}:{OVERCAST_LOCAL_PORT}) to host podcast files from {OVERCAST_LOCAL_DOWNLOAD_DIR} on port.')
+    log.info(f"Creating server accessible from {OVERCAST_LOCAL_HOST_IP}:{OVERCAST_LOCAL_PORT} to host files from {OVERCAST_LOCAL_DOWNLOAD_DIR}")
     server = HTTPServer(("", OVERCAST_LOCAL_PORT), CustomHTTPRequestHandler)
     server.serve_forever()
 
 
 # cleans up the given directory by removing any files older than the specified days
 def cleanup_directory(directory, keep_for_days):
-    log.info(f'Cleaning directory "{directory}" by deleting files over {keep_for_days} days old.')
+    log.info(f"Cleaning directory {directory} by deleting files over {keep_for_days} days old")
 
     cutoff_time = time.time() - (keep_for_days * 86400)
     for file in list(Path(directory).rglob("*")):
@@ -127,11 +127,11 @@ def cleanup_directory(directory, keep_for_days):
             continue
 
         if file.stat().st_ctime < cutoff_time:
-            log.info(f'Removing old file "{file}."')
+            log.info(f"Removing old file: {file}")
             try:
                 file.unlink()
             except Exception:
-                log.error(f'Could not delete "{file}."')
+                log.error(f"Could not delete file: {file}")
 
 
 # returns a media collection object for a podcast entry
@@ -155,7 +155,7 @@ def create_podcast_media_collection(podcast, unplayed_only=False):
 ###
 
 def getSessionId(username, password):
-    log.debug('at=getSessionId username=%s password=%s', username, password)
+    log.debug(f"at=getSessionId username={username}, password={password}")
     return username
 
 
@@ -175,7 +175,7 @@ dispatcher.register_function(
 
 # Gets metadata for podcasts and episodes, depending on which id is sent from Sonos
 def getMetadata(id, index, count, recursive=False):
-    log.debug('at=getMetadata id=%s index=%s count=%s recursive=%s', id, index, count, recursive)
+    log.debug(f"at=getMetadata id={id}, index={index}, count={count}, recursive={recursive}")
 
     if id == 'root':
         # the root view will show a 'all podcasts' subcollection, 'unplayed podcasts' subcollection, and any unplayed podcasts individually
@@ -279,7 +279,7 @@ def getMetadata(id, index, count, recursive=False):
                 }
             )
     else:
-        logging.error('unknown getMetadata id id=%s', id)
+        log.error(f"Unknown getMetadata id={id}")
         response = {
             'getMetadataResult': [
                 {
@@ -290,7 +290,7 @@ def getMetadata(id, index, count, recursive=False):
             ]
         }
 
-    log.debug('at=getMetadata response=%s', response)
+    log.debug(f"at=getMetadata response={response}")
     return response
 
 
@@ -317,9 +317,8 @@ dispatcher.register_function(
 
 # Get the metadata for a single item/episode
 def getMediaMetadata(id):
-    log.debug('at=getMediaMetadata id=%s', id)
     _, episode_id = id.rsplit('/', 1)
-    log.debug('at=getMediaMetadata episode_id=%s', episode_id)
+    log.debug(f"at=getMediaMetadata id={id}, episode_id={episode_id}")
     episode = overcast.get_episode_detail(episode_id)
     if episode is not None:
         response = {
@@ -340,7 +339,7 @@ def getMediaMetadata(id):
                 }
             }
         }
-        log.debug('at=getMediaMetadata response=%s', response)
+        log.debug(f"at=getMediaMetadata response={response}")
         return response
     else:
         return None
@@ -361,8 +360,8 @@ dispatcher.register_function(
 
 # Get the URI for an episode
 def getMediaURI(id):
-    log.debug('at=getMediaURI id=%s', id)
     _, episode_id = id.rsplit('/', 1)
+    log.debug(f"at=getMediaURI id={id}, episode_id={episode_id}")
     episode = overcast.get_episode_detail(episode_id)
     response = {
         'getMediaURIResult': utilities.final_redirect_url(
@@ -379,7 +378,7 @@ def getMediaURI(id):
             'offsetMillis': episode['offsetMillis']
         }
     }
-    log.debug('at=getMediaURI response=%s', response)
+    log.debug(f"at=getMediaURI response={response}")
     return response
 
 
@@ -398,7 +397,7 @@ dispatcher.register_function(
 ###
 
 def getLastUpdate():
-    log.debug('at=getLastUpdate')
+    log.debug("at=getLastUpdate")
     return {
         'getLastUpdateResult': {
             'catalog': str(uuid.uuid4()),
@@ -426,7 +425,7 @@ dispatcher.register_function(
 
 def reportPlaySeconds(id, seconds, offsetMillis, contextId):
     episode_id = id.rsplit('/', 1)[-1]
-    log.debug('at=reportPlaySeconds and id=%s, seconds=%d, offsetMillis=%d, contextId=%s, episode_id=%s', id, seconds, offsetMillis, contextId, episode_id)
+    log.debug(f"at=reportPlaySeconds id={id}, seconds={seconds}, offsetMillis={offsetMillis}, contextId={contextId}, episode_id={episode_id}")
     episode = overcast.get_episode_detail(episode_id, offsetMillis)
     overcast.update_episode_offset(episode, offsetMillis/1000)
     return {
@@ -456,7 +455,7 @@ dispatcher.register_function(
 
 def reportPlayStatus(id, status, offsetMillis, contextId):
     episode_id = id.rsplit('/', 1)[-1]
-    log.debug('at=reportPlayStatus and id=%s, status=%s, contextId=%s, offsetMillis=%d, episode_id=%s', id, status, contextId, offsetMillis, episode_id)
+    log.debug(f"at=reportPlayStatus id={id}, status={status}, contextId={contextId}, offsetMillis={offsetMillis}, episode_id={episode_id}")
     episode = overcast.get_episode_detail(episode_id, offsetMillis)
     overcast.update_episode_offset(episode, offsetMillis/1000)
 
@@ -477,7 +476,7 @@ dispatcher.register_function(
 
 def setPlayedSeconds(id, seconds, offsetMillis, contextId):
     episode_id = id.rsplit('/', 1)[-1]
-    log.debug('at=setPlayedSeconds and id=%s, seconds=%d, offsetMillis=%d, contextId=%s, episode_id=%s', id, seconds, offsetMillis, contextId, episode_id)
+    log.debug(f"at=setPlayedSeconds id={id}, seconds={seconds}, offsetMillis={offsetMillis}, contextId={contextId}, episode_id={episode_id}")
     episode = overcast.get_episode_detail(episode_id, offsetMillis)
     overcast.update_episode_offset(episode, offsetMillis/1000)
 
@@ -496,7 +495,7 @@ dispatcher.register_function(
 
 
 if __name__ == '__main__':
-    log.debug('at=__main__')
+    log.debug("at=__main__")
 
     # potentially create a local server to host podcast files if the host IP address was provided
     if OVERCAST_LOCAL_HOST_IP:

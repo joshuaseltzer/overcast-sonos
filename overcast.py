@@ -15,12 +15,13 @@ log = logging.getLogger('overcast-sonos')
 
 UNPLAYED_EPISODE_PREFIX = '* '
 EPISODE_CACHE_SIZE = 5
+HOSTNAME = "https://overcast.fm"
 
 class Overcast(object):
     def __init__(self, email, password):
         self.episode_cache = OrderedDict()
         self.session = requests.session()
-        r = self.session.post('https://overcast.fm/login', {'email': email, 'password': password})
+        r = self.session.post(f"{HOSTNAME}/login", {'email': email, 'password': password})
         doc = lxml.html.fromstring(r.content)
         alert = doc.cssselect('div.alert')
         if alert:
@@ -34,7 +35,7 @@ class Overcast(object):
 
         # check first to see if the episode is in the cache
         if episode_id in self.episode_cache:
-            log.debug('''retrieving episode details for \"%s\" from the cache''', episode_id)
+            log.debug(f"Retrieving episode details for {episode_id} from the cache")
             episode = self.episode_cache.pop(episode_id)
 
             # if the offset was not specified or the episode duration was not correctly determined previously, invalidate this cached episode
@@ -45,8 +46,8 @@ class Overcast(object):
                 episode['offsetMillis'] = updated_offset_millis
         
         if not episode:
-            log.debug('''retrieving episode details for \"%s\" from Overcast''', episode_id)
-            episode_href = urllib.parse.urljoin('https://overcast.fm', episode_id)
+            log.debug(f"Retrieving episode details for {episode_id} from Overcast")
+            episode_href = urllib.parse.urljoin(HOSTNAME, episode_id)
             doc = self._get_html(episode_href)
             audioplayer = doc.cssselect('audio#audioplayer')
 
@@ -87,15 +88,15 @@ class Overcast(object):
 
             # check to see if any episode(s) should be purged from the cache
             while len(self.episode_cache) > EPISODE_CACHE_SIZE:
-                log.debug('removing an episode from the cache')
+                log.debug("Removing an episode from the cache")
                 self.episode_cache.popitem(last=False)
 
         return episode
 
     def get_episode_time_remaining_seconds(self, episode_id, episode_html):
-        log.debug('''getting the remaining time. episode id is %s''', episode_id)
+        log.debug(f"Getting the remaining time for episode id {episode_id}")
         podcast_id = episode_html.cssselect('div.centertext h3 a')[0].attrib['href']
-        podcast_href = urllib.parse.urljoin('https://overcast.fm', podcast_id)
+        podcast_href = urllib.parse.urljoin(HOSTNAME, podcast_id)
         doc = self._get_html(podcast_href)
 
         for cell in doc.cssselect('a.extendedepisodecell'):
@@ -111,7 +112,8 @@ class Overcast(object):
 
     def get_all_podcasts(self, unplayed_only=False):
         podcasts = []
-        doc = self._get_html('https://overcast.fm/podcasts')
+
+        doc = self._get_html(urllib.parse.urljoin(HOSTNAME, podcasts))
         for cell in doc.cssselect('a.feedcell'):
             if 'href' in cell.attrib:
                 # perform a check to see if this podcast is unplayed
@@ -132,10 +134,7 @@ class Overcast(object):
         }
 
     def get_all_podcast_episodes(self, podcast_id, unplayed_only=False):
-        """
-        get all episodes (played or not) for a podcast.
-        """
-        podcast_href = urllib.parse.urljoin('https://overcast.fm', podcast_id)
+        podcast_href = urllib.parse.urljoin(HOSTNAME, podcast_id)
         doc = self._get_html(podcast_href)
         album_art_uri = doc.cssselect('img.art')[0].attrib['src']
         podcast_title = doc.cssselect('h2.centertext')[0].text_content()
@@ -150,14 +149,14 @@ class Overcast(object):
 
                 # only continue if we are returning all episodes or unplayed episodes
                 if not unplayed_only or (unplayed_only and episode_prefix != ''):
-                    episode_id = urllib.parse.urljoin('https://overcast.fm', cell.attrib.get('href', '')).lstrip('/')
+                    episode_id = urllib.parse.urljoin(HOSTNAME, cell.attrib.get('href', '')).lstrip('/')
                     episode_title = cell.cssselect('div.titlestack div.title')[0].text_content().strip().replace('\n', '')
                     summary = cell.cssselect('div.titlestack div.caption2')[0].text_content().strip().replace('\n', '')
                     release_date = utilities.convert_release_date(summary)
                     episode = {
                         'id': episode_id,
                         'title': f"{episode_prefix}{episode_title}",
-                        'audio_type': 'audio/mpeg',
+                        'audio_type': 'audio/mpeg', # the actual audio_type is unknown at this point
                         'podcast_title': podcast_title,
                         'albumArtURI': album_art_uri,
                         'summary': summary,
@@ -172,23 +171,25 @@ class Overcast(object):
         return episodes
 
     def update_episode_offset(self, episode, updated_offset_seconds):
-        log.debug("updated_offset_seconds = %d and duration = %d", updated_offset_seconds, episode['duration'])
+        log.debug(f"updated_offset_seconds = {updated_offset_seconds} and duration = {episode['duration']}")
         
-        url = 'https://overcast.fm/podcasts/set_progress/' + episode['data_item_id']
+        url = urllib.parse.urljoin(HOSTNAME, '/podcasts/set_progress/', episode.get('data_item_id'))
         params = {
             'p': updated_offset_seconds,
             'speed': 0,
-            'v': episode['data_sync_version']
+            'v': episode.get('data_sync_version')
         }
-        log.debug('Updating offset of episode with id %s to %d', episode['id'], updated_offset_seconds)
+        log.debug(f"Updating offset of episode with id {episode['id']} to {updated_offset_seconds}")
         self.session.post(url, params)
 
         # Remove episode if less than 60 seconds remaining - due to Overcast not giving us accurate episode lengths we have to do this
         # or we end up with finished episodes still showing in the list
-        if updated_offset_seconds >= (episode['duration'] - 60):
+        if updated_offset_seconds >= (episode.get('duration', -1) - 60):
             self.delete_episode(episode)
 
     def delete_episode(self, episode):
-        url = 'https://overcast.fm' + episode['delete_episode_uri']
-        log.debug('Deleting episode with id %s', episode['id'])
-        self.session.post(url)
+        delete_episode_uri = episode.get('delete_episode_uri')
+        if delete_episode_uri:
+            url = urllib.parse.urljoin(HOSTNAME, delete_episode_uri)
+            log.debug(f'Deleting episode with id {episode['id']}',)
+            self.session.post(url)
