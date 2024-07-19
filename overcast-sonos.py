@@ -115,6 +115,7 @@ mediaMetadata = {
 # starts a local server instance to host podcast files directly
 def start_local_server():
     log.info(f"Creating server accessible from {OVERCAST_LOCAL_HOST_IP}:{OVERCAST_LOCAL_PORT} to host files from the \"{OVERCAST_LOCAL_DOWNLOAD_DIR}\" directory")
+    os.makedirs(OVERCAST_LOCAL_DOWNLOAD_DIR, exist_ok=True)
     server = ThreadingHTTPServer(("", OVERCAST_LOCAL_PORT), CustomRangeRequestHandler)
     server.serve_forever()
 
