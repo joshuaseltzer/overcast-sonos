@@ -3,8 +3,10 @@ import logging
 import uuid
 import schedule
 import http
+import threading
+import time
+from datetime import datetime, timedelta
 from RangeHTTPServer import RangeRequestHandler
-from threading import Thread
 from overcast import Overcast, utilities
 from pysimplesoap.server import SoapDispatcher, SOAPHandler
 from http.server import HTTPServer, ThreadingHTTPServer
@@ -477,18 +479,54 @@ dispatcher.register_function(
 )
 
 
+# Modified solution from https://schedule.readthedocs.io/en/stable/background-execution.html
+def run_schedule_continuously(interval=1):
+    """Continuously run, while executing pending jobs at each
+    elapsed time interval.
+    @return cease_continuous_run: threading. Event which can
+    be set to cease continuous run. Please note that it is
+    *intended behavior that run_continuously() does not run
+    missed jobs*. For example, if you've registered a job that
+    should run every minute and you set a continuous run
+    interval of one hour then your job won't be run 60 times
+    at each interval but only once.
+    """
+    cease_continuous_run = threading.Event()
+
+    class ScheduleThread(threading.Thread):
+        @classmethod
+        def run(cls):
+            while not cease_continuous_run.is_set():
+                schedule.run_pending()
+                time.sleep(interval)
+
+    continuous_thread = ScheduleThread()
+    continuous_thread.start()
+    return cease_continuous_run
+
+
 if __name__ == '__main__':
     log.debug("at=__main__")
 
     # potentially create a local server to host podcast files if the host IP address was provided
+    run_schedule = None
     if OVERCAST_LOCAL_HOST_IP:
-        Thread(target=start_local_server).start()
+        threading.Thread(target=start_local_server).start()
 
-        # perform a cleanup on the local directory and schedule a daily cleanup
+        # schedule a cleanup of the download directory to occur once a day
+        hh_mm = (datetime.now() + timedelta(minutes=-1)).strftime('%H:%M')
+        schedule.every().day.at(hh_mm).do(utilities.cleanup_directory, directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
+        run_schedule = run_schedule_continuously(interval=86400)
+        log.info(f"Scheduling a cleanup of the \"{OVERCAST_LOCAL_DOWNLOAD_DIR}\" directory to run daily at {hh_mm}")
+
+        # run a cleanup immediately
         utilities.cleanup_directory(directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
-        schedule.every().day.at('02:00').do(utilities.cleanup_directory, directory=OVERCAST_LOCAL_DOWNLOAD_DIR, keep_for_days=OVERCAST_LOCAL_KEEP_FOR_DAYS)
 
     # start the main Soap server
     httpd = HTTPServer(("", OVERCAST_SONOS_PORT), CustomSOAPHandler)
     httpd.dispatcher = dispatcher
     httpd.serve_forever()
+
+    if run_schedule:
+        # stop schedule
+        run_schedule.set()
