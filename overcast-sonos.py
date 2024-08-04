@@ -20,9 +20,9 @@ ALL_PODCASTS_ID = 'all_podcasts'
 UNPLAYED_PODCASTS_ID = 'unplayed_podcasts'
 UNPLAYED_PODCAST_ID_PREFIX = 'podcast_unplayed'
 PODCAST_ID_PREFIX = 'podcast'
-REPORT_PLAY_SECONDS_INTERVAL = 30
 
 # grab some variables from the environment variables
+OVERCAST_REPORT_PLAY_SECONDS_INTERVAL = int(os.environ.get('OVERCAST_REPORT_PLAY_SECONDS_INTERVAL', 60))
 OVERCAST_SONOS_PORT = int(os.environ.get('OVERCAST_SONOS_PORT', 8140))
 OVERCAST_USERNAME = os.environ.get('OVERCAST_USERNAME')
 OVERCAST_PASSWORD = os.environ.get('OVERCAST_PASSWORD')
