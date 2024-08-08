@@ -18,7 +18,7 @@ from datetime import datetime
 
 log = logging.getLogger('overcast-sonos')
 
-INVALID_HOSTS = ['dcs.megaphone.fm']
+INVALID_HOSTS = ['dcs.megaphone.fm', 'dcs-cached.megaphone.fm']
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds

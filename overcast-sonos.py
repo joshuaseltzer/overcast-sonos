@@ -416,7 +416,7 @@ def reportPlaySeconds(id, seconds, offsetMillis, contextId):
     overcast.update_episode_offset(episode, offsetMillis/1000)
     return {
         'reportPlaySecondsResult': {
-            'interval': REPORT_PLAY_SECONDS_INTERVAL
+            'interval': OVERCAST_REPORT_PLAY_SECONDS_INTERVAL
         }
     }
 
