@@ -16,6 +16,7 @@ log = logging.getLogger('overcast-sonos')
 UNPLAYED_EPISODE_PREFIX = '* '
 EPISODE_CACHE_SIZE = 5
 HOSTNAME = "https://overcast.fm"
+KNOWN_DURATIONS = {"Scorchin’ Radio": 3600}
 
 class Overcast(object):
     def __init__(self, email, password):
@@ -60,12 +61,13 @@ class Overcast(object):
                     if time_elapsed_seconds == duration:
                         duration = -1
                 else:
-                    # if the time remaining could not be determined, "hack" the duration for known podcasts here
-                    if "Scorchin’ Radio" in title:
-                        log.debug("Overriding the duration for \"Scorchin' Radio\" podcast")
-                        duration = 3600
-                    else:
-                        duration = -1
+                    # if the time remaining could not be determined, override the duration for known podcasts here
+                    duration = -1
+                    for known_title in KNOWN_DURATIONS.keys():
+                        if known_title in title:
+                            log.debug(f"Overriding the duration for '{title}")
+                            duration = KNOWN_DURATIONS.get(known_title)
+                            break
 
                 audioplayer_source = doc.cssselect('audio#audioplayer source')
                 episode = {
@@ -172,26 +174,25 @@ class Overcast(object):
         return episodes
 
     def update_episode_offset(self, episode, updated_offset_seconds):
-        log.debug(f"updated_offset_seconds = {updated_offset_seconds} and duration = {episode['duration']}")
-        
+        log.debug(f"updated_offset_seconds = {updated_offset_seconds}")
         if episode.get('data-saved-for-user', 0) == 1:
-            url = urllib.parse.urljoin(HOSTNAME, f"/podcasts/set_progress/{episode.get('data_item_id', '')}")
-            params = {
-                'p': updated_offset_seconds,
-                'speed': 0,
-                'v': episode.get('data_sync_version')
-            }
-            log.debug(f"Updating offset of episode with id {episode['id']} to {updated_offset_seconds}")
-            self.session.post(url, params)
-
-            # Remove episode if less than 60 seconds remaining - due to Overcast not giving us accurate episode lengths we have to do this
+            # Remove episode if less than 60 seconds remaining due to Overcast not giving us accurate episode lengths we have to do this
             # or we end up with finished episodes still showing in the list
             if updated_offset_seconds >= (episode.get('duration', -1) - 60):
                 self.delete_episode(episode)
+            else:
+                url = urllib.parse.urljoin(HOSTNAME, f"/podcasts/set_progress/{episode.get('data_item_id', '')}")
+                params = {
+                    'p': updated_offset_seconds,
+                    'speed': 0,
+                    'v': episode.get('data_sync_version')
+                }
+                log.debug(f"Updating offset of episode with id '{episode.get('id', '')}' to {updated_offset_seconds}")
+                self.session.post(url, params)
 
     def delete_episode(self, episode):
         delete_episode_uri = episode.get('delete_episode_uri')
         if delete_episode_uri:
             url = urllib.parse.urljoin(HOSTNAME, delete_episode_uri)
-            log.debug(f"Deleting episode with id {episode['id']}")
+            log.debug(f"Deleting episode with id '{episode.get('id', '')}'")
             self.session.post(url)
