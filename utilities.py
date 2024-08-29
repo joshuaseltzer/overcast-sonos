@@ -18,7 +18,7 @@ from datetime import datetime
 
 log = logging.getLogger('overcast-sonos')
 
-INVALID_HOSTS = ['dcs.megaphone.fm', 'dcs-cached.megaphone.fm']
+INVALID_HOSTS = ['megaphone.fm']
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
@@ -56,7 +56,7 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
     # If an invalid host is found and local server information is provided, download the file directly to the system
     # and then return that URL for Sonos to stream from.
     parsed_url = urllib.parse.urlparse(redirected_url)
-    if parsed_url.hostname in INVALID_HOSTS:
+    if any(invalid_host in parsed_url.hostname for invalid_host in INVALID_HOSTS):
         log.info(f"\"{podcast_title}\" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname})")
 
         # if local parameters were given, attempt to download and host the podcast directly from this server
