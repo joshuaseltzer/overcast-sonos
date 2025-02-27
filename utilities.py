@@ -18,7 +18,8 @@ from datetime import datetime
 
 log = logging.getLogger('overcast-sonos')
 
-INVALID_HOSTS = ['megaphone.fm']
+INVALID_HOSTS = ['megaphone.fm', 'podtoo.com']
+USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15'
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
@@ -147,6 +148,9 @@ def slugify(value, allow_unicode=False):
 
 # Modified solution from https://stackoverflow.com/a/39217788/1102981
 def download_file(url, local_filename):
-    with requests.get(url, stream=True) as r:
-        with open(local_filename, 'wb') as f:
-            shutil.copyfileobj(r.raw, f)
+    with requests.get(url, stream=True, headers={'User-Agent': USER_AGENT}) as r:
+        if r.ok:
+            with open(local_filename, 'wb') as f:
+                shutil.copyfileobj(r.raw, f)
+        else:
+            log.info(f'There was an error downloading the podcast locally: {r}')
