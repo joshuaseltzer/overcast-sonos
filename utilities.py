@@ -83,7 +83,8 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                             shutil.copyfileobj(response.raw, f, length=DOWNLOAD_CHUNK_SIZE)
 
                     # create the URL that will be used to host this podcast file
-                    return f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
+                    url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
+            return url
         else:
             log.error(f"Error trying to determine the final URL for podcast: {response}")
             return ""
