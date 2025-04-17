@@ -19,7 +19,7 @@ from datetime import datetime
 log = logging.getLogger('overcast-sonos')
 
 
-INVALID_PODCAST_HOSTS = ['megaphone.fm', 'podtoo.com']
+INVALID_PODCAST_HOSTS = ['megaphone.fm', 'podtoo.com', 'podbean.com']
 DOWNLOAD_CHUNK_SIZE = 256 * 1024   # 256 KB
 USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15'
 
