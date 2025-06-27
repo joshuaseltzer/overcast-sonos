@@ -12,6 +12,7 @@ import shutil
 import time
 import unicodedata
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from datetime import datetime
 
@@ -20,8 +21,8 @@ log = logging.getLogger('overcast-sonos')
 
 
 INVALID_PODCAST_HOSTS = ['megaphone.fm', 'podtoo.com', 'podbean.com']
-DOWNLOAD_CHUNK_SIZE = 256 * 1024   # 256 KB
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15'
+DOWNLOAD_CHUNK_SIZE = 2 * 1024 * 1024   # 1 MB
+USER_AGENT = 'Overcast/3.0 (+http://overcast.fm/; iOS podcast app)'
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
@@ -42,11 +43,67 @@ def duration_in_seconds(duration_str):
         return seconds
 
 
+# Download all of the bytes for podcasts which return partial content (HTTP status 206) and provide a content-range.
+# Returns true on success or false if any error occurs.
+def write_bytes(url, initial_response, full_file_path):
+    success = True
+
+    # check if we might potentially need to request multiple ranges
+    with open(full_file_path, 'wb') as file:
+        if initial_response.status_code == 206 and initial_response.headers.get('accept-ranges', '') == 'bytes':
+            # determine the full length of the content
+            log.info('Response returned Partial Content (206) and supports Accept-Ranges')
+            content_range = initial_response.headers.get("content-range")
+            if content_range:
+                total_size = content_range.split('/')[-1]
+                if total_size != '*' and total_size.isdigit():
+                    total_size = int(total_size)
+                    content_length = initial_response.headers.get("content-length")
+                    if content_length and content_length.isdigit() and int(content_length) == total_size:
+                        # if the response's content length is equal to the total size, fall back to getting the bytes using iter_content
+                        log.info('The Content-Length is the same as the total size reported by Content-Range and therefore will be downloaded in a single request')
+                        for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                            if chunk:
+                                file.write(chunk)
+                    else:
+                        # write the initial chunk of data
+                        bytes_length = len(initial_response.content)
+                        file.write(initial_response.content)
+                        log.info(f"Saved {bytes_length}")
+                        while bytes_length < total_size:
+                            # keep requesting content as long as some remains
+                            with requests.get(url, stream=True, headers={'Range': f'bytes={bytes_length}-', 'User-Agent': USER_AGENT}) as chunk_response:
+                                if chunk_response.ok:
+                                    bytes_length += len(chunk_response.content)
+                                    file.write(chunk_response.content)
+                                    log.info(f"Saved {bytes_length}")
+                                else:
+                                    log.error(f"An error occurred when downloading a chunked Range request")
+                                    success = False
+                                    break
+                else:
+                    log.error(f"The total file size could not be determined for Range requests")
+                    success = False
+            else:
+                log.error(f"The Content-Range header was not included which is required for Range requests")
+                success = False
+        elif initial_response.status_code == 200:
+            log.info('Response returned OK and will be downloaded in a single request')
+            for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                if chunk:
+                    file.write(chunk)
+        else:
+            log.error(f"An unhandled status code was returned for this response: {initial_response.status_code}")
+            success = False
+
+    return success
+
+
 # Works out the final URL for those podcast platforms that redirect to another URL
 # If the redirected URL has a #t= timecode in it, we remove this as the Sonos player can't play these back, and it fixes compatibility with requests 2.19 and higher
 def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir):
     # in a previous version of this logic, a HEAD request was used but some servers did not redirect properly unless a GET was sent
-    with requests.get(url, allow_redirects=False, stream=True, headers={'User-Agent': USER_AGENT}) as response:
+    with requests.get(url, allow_redirects=False, stream=True, headers={'Range': 'bytes=0-', 'User-Agent': USER_AGENT}) as response:
         if response.is_redirect:
             redirected_url = response.headers['Location']
             log.info(f"Redirected {url} to {redirected_url}")
@@ -79,8 +136,11 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                         # since the file does not exist locally, download it now
                         os.makedirs(file_dir, exist_ok=True)
                         log.info(f"Downloading podcast to {full_file_path} from {url}")
-                        with open(full_file_path, 'wb') as f:
-                            shutil.copyfileobj(response.raw, f, length=DOWNLOAD_CHUNK_SIZE)
+                        if write_bytes(url, response, full_file_path):
+                            log.info(f"Successfully downloaded {filename}")
+                        else:
+                            log.error(f"Error downloading {filename}")
+                            return ""
 
                     # create the URL that will be used to host this podcast file
                     url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
