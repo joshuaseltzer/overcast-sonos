@@ -12,6 +12,7 @@ import shutil
 import time
 import unicodedata
 import urllib.parse
+import urllib.request
 from pathlib import Path
 from datetime import datetime
 
@@ -20,8 +21,8 @@ log = logging.getLogger('overcast-sonos')
 
 
 INVALID_PODCAST_HOSTS = ['megaphone.fm', 'podtoo.com', 'podbean.com']
-DOWNLOAD_CHUNK_SIZE = 256 * 1024   # 256 KB
-USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15'
+DOWNLOAD_CHUNK_SIZE = 1 * 1024 * 1024   # 1 MB
+USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0'
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
@@ -42,11 +43,33 @@ def duration_in_seconds(duration_str):
         return seconds
 
 
+# download all of the bytes for podcasts which return partial content (HTTP status 206) and provide a content-range
+def get_bytes(url, initial_response):
+    bytes = None
+
+    # determine the full length of the content
+    content_range = initial_response.headers.get("content-range")
+    if content_range:
+        total_size = content_range.split('/')[-1]
+        if total_size != '*' and total_size.isdigit():
+            bytes = initial_response.content
+            while len(bytes) < int(total_size):
+                # keep requesting content as long as some remains
+                with requests.get(url, stream=True, headers={'Range': f'bytes={len(bytes)}-', 'User-Agent': USER_AGENT}) as chunk_response:
+                    if chunk_response.ok:
+                        bytes += chunk_response.content
+                    else:
+                        bytes = None
+                        break
+
+    return bytes
+
+
 # Works out the final URL for those podcast platforms that redirect to another URL
 # If the redirected URL has a #t= timecode in it, we remove this as the Sonos player can't play these back, and it fixes compatibility with requests 2.19 and higher
 def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir):
     # in a previous version of this logic, a HEAD request was used but some servers did not redirect properly unless a GET was sent
-    with requests.get(url, allow_redirects=False, stream=True, headers={'User-Agent': USER_AGENT}) as response:
+    with requests.get(url, allow_redirects=False, stream=True, headers={'Range': 'bytes=0-', 'User-Agent': USER_AGENT}) as response:
         if response.is_redirect:
             redirected_url = response.headers['Location']
             log.info(f"Redirected {url} to {redirected_url}")
@@ -79,8 +102,22 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                         # since the file does not exist locally, download it now
                         os.makedirs(file_dir, exist_ok=True)
                         log.info(f"Downloading podcast to {full_file_path} from {url}")
-                        with open(full_file_path, 'wb') as f:
-                            shutil.copyfileobj(response.raw, f, length=DOWNLOAD_CHUNK_SIZE)
+                        if response.status_code == 206 and response.headers.get('accept-ranges', '') == 'bytes':
+                            # if partial content was returned, multiple requests will be required to get all of the bytes for this podcast
+                            bytes = get_bytes(url, response)
+                            if bytes:
+                                with open(full_file_path, 'wb') as file:
+                                    file.write(bytes)
+                                log.info(f"Successfully downloaded {filename} using chunked range requests")
+                            else:
+                                log.error(f"Error downloading {filename} using chunked range requests")
+                                return ""
+                        else:
+                            with open(full_file_path, 'wb') as file:
+                                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                                    if chunk:
+                                        file.write(chunk)
+                            log.info(f"Successfully downloaded {filename} using iter_content)")
 
                     # create the URL that will be used to host this podcast file
                     url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
