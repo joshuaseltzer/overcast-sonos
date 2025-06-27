@@ -43,26 +43,52 @@ def duration_in_seconds(duration_str):
         return seconds
 
 
-# download all of the bytes for podcasts which return partial content (HTTP status 206) and provide a content-range
-def get_bytes(url, initial_response):
-    bytes = None
+# Download all of the bytes for podcasts which return partial content (HTTP status 206) and provide a content-range.
+# Returns true on success or false if any error occurs.
+def write_bytes(url, initial_response, full_file_path):
+    success = True
 
-    # determine the full length of the content
-    content_range = initial_response.headers.get("content-range")
-    if content_range:
-        total_size = content_range.split('/')[-1]
-        if total_size != '*' and total_size.isdigit():
-            bytes = initial_response.content
-            while len(bytes) < int(total_size):
-                # keep requesting content as long as some remains
-                with requests.get(url, stream=True, headers={'Range': f'bytes={len(bytes)}-', 'User-Agent': USER_AGENT}) as chunk_response:
-                    if chunk_response.ok:
-                        bytes += chunk_response.content
+    # check if we might potentially need to request multiple ranges
+    with open(full_file_path, 'wb') as file:
+        if initial_response.status_code == 206 and initial_response.headers.get('accept-ranges', '') == 'bytes':
+            # determine the full length of the content
+            content_range = initial_response.headers.get("content-range")
+            if content_range:
+                total_size = content_range.split('/')[-1]
+                if total_size != '*' and total_size.isdigit():
+                    total_size = int(total_size)
+                    content_length = initial_response.headers.get("content-length")
+                    if content_length and content_length.isdigit() and int(content_length) == total_size:
+                        # if the response's content length is equal to the total size, fall back to getting the bytes using iter_content
+                        for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                            if chunk:
+                                file.write(chunk)
                     else:
-                        bytes = None
-                        break
+                        # write the initial chunk of data
+                        bytes_length = len(initial_response.content)
+                        file.write(initial_response.content)
+                        while bytes_length < total_size:
+                            # keep requesting content as long as some remains
+                            with requests.get(url, stream=True, headers={'Range': f'bytes={bytes_length}-', 'User-Agent': USER_AGENT}) as chunk_response:
+                                if chunk_response.ok:
+                                    bytes_length += len(chunk_response.content)
+                                    file.write(chunk_response.content)
+                                else:
+                                    log.error(f"An error occurred when downloading a chunked Range request")
+                                    success = False
+                                    break
+                else:
+                    log.error(f"The total file size could not be determined for Range requests")
+                    success = False
+            else:
+                log.error(f"The Content-Range header was not included which is required for Range requests")
+                success = False
+        else:
+            for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                if chunk:
+                    file.write(chunk)
 
-    return bytes
+    return success
 
 
 # Works out the final URL for those podcast platforms that redirect to another URL
@@ -102,22 +128,11 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                         # since the file does not exist locally, download it now
                         os.makedirs(file_dir, exist_ok=True)
                         log.info(f"Downloading podcast to {full_file_path} from {url}")
-                        if response.status_code == 206 and response.headers.get('accept-ranges', '') == 'bytes':
-                            # if partial content was returned, multiple requests will be required to get all of the bytes for this podcast
-                            bytes = get_bytes(url, response)
-                            if bytes:
-                                with open(full_file_path, 'wb') as file:
-                                    file.write(bytes)
-                                log.info(f"Successfully downloaded {filename} using chunked range requests")
-                            else:
-                                log.error(f"Error downloading {filename} using chunked range requests")
-                                return ""
+                        if write_bytes(url, response, full_file_path):
+                            log.info(f"Successfully downloaded {filename}")
                         else:
-                            with open(full_file_path, 'wb') as file:
-                                for chunk in response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
-                                    if chunk:
-                                        file.write(chunk)
-                            log.info(f"Successfully downloaded {filename} using iter_content)")
+                            log.error(f"Error downloading {filename}")
+                            return ""
 
                     # create the URL that will be used to host this podcast file
                     url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
