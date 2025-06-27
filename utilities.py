@@ -21,8 +21,8 @@ log = logging.getLogger('overcast-sonos')
 
 
 INVALID_PODCAST_HOSTS = ['megaphone.fm', 'podtoo.com', 'podbean.com']
-DOWNLOAD_CHUNK_SIZE = 1 * 1024 * 1024   # 1 MB
-USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:139.0) Gecko/20100101 Firefox/139.0'
+DOWNLOAD_CHUNK_SIZE = 2 * 1024 * 1024   # 1 MB
+USER_AGENT = 'Overcast/3.0 (+http://overcast.fm/; iOS podcast app)'
 
 
 # Turns a string like 'Feb 24 - 36 min left' into seconds
@@ -52,6 +52,7 @@ def write_bytes(url, initial_response, full_file_path):
     with open(full_file_path, 'wb') as file:
         if initial_response.status_code == 206 and initial_response.headers.get('accept-ranges', '') == 'bytes':
             # determine the full length of the content
+            log.info('Response returned Partial Content (206) and supports Accept-Ranges')
             content_range = initial_response.headers.get("content-range")
             if content_range:
                 total_size = content_range.split('/')[-1]
@@ -60,6 +61,7 @@ def write_bytes(url, initial_response, full_file_path):
                     content_length = initial_response.headers.get("content-length")
                     if content_length and content_length.isdigit() and int(content_length) == total_size:
                         # if the response's content length is equal to the total size, fall back to getting the bytes using iter_content
+                        log.info('The Content-Length is the same as the total size reported by Content-Range and therefore will be downloaded in a single request')
                         for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                             if chunk:
                                 file.write(chunk)
@@ -67,12 +69,14 @@ def write_bytes(url, initial_response, full_file_path):
                         # write the initial chunk of data
                         bytes_length = len(initial_response.content)
                         file.write(initial_response.content)
+                        log.info(f"Saved {bytes_length}")
                         while bytes_length < total_size:
                             # keep requesting content as long as some remains
                             with requests.get(url, stream=True, headers={'Range': f'bytes={bytes_length}-', 'User-Agent': USER_AGENT}) as chunk_response:
                                 if chunk_response.ok:
                                     bytes_length += len(chunk_response.content)
                                     file.write(chunk_response.content)
+                                    log.info(f"Saved {bytes_length}")
                                 else:
                                     log.error(f"An error occurred when downloading a chunked Range request")
                                     success = False
@@ -83,10 +87,14 @@ def write_bytes(url, initial_response, full_file_path):
             else:
                 log.error(f"The Content-Range header was not included which is required for Range requests")
                 success = False
-        else:
+        elif initial_response.status_code == 200:
+            log.info('Response returned OK and will be downloaded in a single request')
             for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
                 if chunk:
                     file.write(chunk)
+        else:
+            log.error(f"An unhandled status code was returned for this response: {initial_response.status_code}")
+            success = False
 
     return success
 
