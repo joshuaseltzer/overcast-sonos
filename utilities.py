@@ -48,53 +48,54 @@ def duration_in_seconds(duration_str):
 def write_bytes(url, initial_response, full_file_path):
     success = True
 
-    # check if we might potentially need to request multiple ranges
-    with open(full_file_path, 'wb') as file:
-        if initial_response.status_code == 206 and initial_response.headers.get('accept-ranges', '') == 'bytes':
-            # determine the full length of the content
-            log.info('Response returned Partial Content (206) and supports Accept-Ranges')
-            content_range = initial_response.headers.get("content-range")
-            if content_range:
-                total_size = content_range.split('/')[-1]
-                if total_size != '*' and total_size.isdigit():
-                    total_size = int(total_size)
-                    content_length = initial_response.headers.get("content-length")
-                    if content_length and content_length.isdigit() and int(content_length) == total_size:
-                        # if the response's content length is equal to the total size, fall back to getting the bytes using iter_content
-                        log.info('The Content-Length is the same as the total size reported by Content-Range and therefore will be downloaded in a single request')
-                        for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
-                            if chunk:
-                                file.write(chunk)
+    try:
+        # check if we might potentially need to request multiple ranges
+        with open(full_file_path, 'wb') as file:
+            if initial_response.status_code == 206 and initial_response.headers.get('accept-ranges', '') == 'bytes':
+                # determine the full length of the content
+                log.info('Response returned Partial Content (206) and supports Accept-Ranges')
+                content_range = initial_response.headers.get("content-range")
+                if content_range:
+                    total_size = content_range.split('/')[-1]
+                    if total_size != '*' and total_size.isdigit():
+                        total_size = int(total_size)
+                        content_length = initial_response.headers.get("content-length")
+                        if content_length and content_length.isdigit() and int(content_length) == total_size:
+                            # if the response's content length is equal to the total size, fall back to getting the bytes using iter_content
+                            log.info('The Content-Length is the same as the total size reported by Content-Range and therefore will be downloaded in a single request')
+                            for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                                if chunk:
+                                    file.write(chunk)
+                        else:
+                            # write the initial chunk of data
+                            bytes_length = len(initial_response.content)
+                            file.write(initial_response.content)
+                            log.info(f"Saved {bytes_length}")
+                            while bytes_length < total_size:
+                                # keep requesting content as long as some remains
+                                with requests.get(url, stream=True, headers={'Range': f'bytes={bytes_length}-', 'User-Agent': USER_AGENT}) as chunk_response:
+                                    if chunk_response.ok:
+                                        bytes_length += len(chunk_response.content)
+                                        file.write(chunk_response.content)
+                                        log.info(f"Saved {bytes_length}")
+                                    else:
+                                        log.error(f"An error occurred when downloading a chunked Range request")
+                                        success = False
+                                        break
                     else:
-                        # write the initial chunk of data
-                        bytes_length = len(initial_response.content)
-                        file.write(initial_response.content)
-                        log.info(f"Saved {bytes_length}")
-                        while bytes_length < total_size:
-                            # keep requesting content as long as some remains
-                            with requests.get(url, stream=True, headers={'Range': f'bytes={bytes_length}-', 'User-Agent': USER_AGENT}) as chunk_response:
-                                if chunk_response.ok:
-                                    bytes_length += len(chunk_response.content)
-                                    file.write(chunk_response.content)
-                                    log.info(f"Saved {bytes_length}")
-                                else:
-                                    log.error(f"An error occurred when downloading a chunked Range request")
-                                    success = False
-                                    break
+                        log.error(f"The total file size could not be determined for Range requests")
+                        success = False
                 else:
-                    log.error(f"The total file size could not be determined for Range requests")
+                    log.error(f"The Content-Range header was not included which is required for Range requests")
                     success = False
             else:
-                log.error(f"The Content-Range header was not included which is required for Range requests")
-                success = False
-        elif initial_response.status_code == 200:
-            log.info('Response returned OK and will be downloaded in a single request')
-            for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
-                if chunk:
-                    file.write(chunk)
-        else:
-            log.error(f"An unhandled status code was returned for this response: {initial_response.status_code}")
-            success = False
+                log.info('Response will be downloaded in a single request')
+                for chunk in initial_response.iter_content(chunk_size=DOWNLOAD_CHUNK_SIZE):
+                    if chunk:
+                        file.write(chunk)
+    except Exception as e:
+        log.error(f"An unhandled exception occurred while writing the bytes: {e}")
+        success = False
 
     return success
 
@@ -140,6 +141,7 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                             log.info(f"Successfully downloaded {filename}")
                         else:
                             log.error(f"Error downloading {filename}")
+                            os.remove(full_file_path)
                             return ""
 
                     # create the URL that will be used to host this podcast file
