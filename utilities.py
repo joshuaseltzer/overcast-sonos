@@ -114,7 +114,7 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
         local_podcast_files = glob.glob(os.path.join(full_podcast_dir, filename) + ".*")
         if len(local_podcast_files) > 0:
             full_filename = os.path.basename(local_podcast_files[0])
-            log.info(f"A copy of {title} has already been downloaded to the server ({full_filename}) and will be used for this podcast")
+            log.info(f"A copy of \"{title}\" has already been downloaded to the server ({full_filename})")
             url = f"http://{local_ip}:{local_port}/{podcast_dir}/{full_filename}"
             log.info(f"Using a locally-hosted URL for this podcast: {url}")
             return url
@@ -139,7 +139,7 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
             # and then return that URL for Sonos to stream from.
             parsed_url = urllib.parse.urlparse(url)
             if any(invalid_host in parsed_url.hostname for invalid_host in INVALID_PODCAST_HOSTS):
-                log.info(f"\"{podcast_title}\" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname})")
+                log.info(f"\"{title}\" is hosted from a URL which will refuse to play on Sonos ({parsed_url.hostname})")
 
                 # if local parameters were given, attempt to download and host the podcast directly from this server
                 file_ext = os.path.splitext(parsed_url.path)[1]
