@@ -6,6 +6,7 @@ Little utility functions to help you along :)
 
 import requests
 import logging
+import glob
 import re
 import os
 import shutil
@@ -102,13 +103,28 @@ def write_bytes(url, initial_response, full_file_path):
 
 # Works out the final URL for those podcast platforms that redirect to another URL
 # If the redirected URL has a #t= timecode in it, we remove this as the Sonos player can't play these back, and it fixes compatibility with requests 2.19 and higher
-def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir):
+def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_download_dir, check_for_local_download=True):
+    # before making the first redirect request, check to see if a podcast file already exists locally on the server
+    if check_for_local_download and local_ip and local_port and local_download_dir:
+        podcast_dir = slugify(podcast_title)
+        full_podcast_dir = os.path.join(local_download_dir, podcast_dir)
+        filename = slugify(title)
+
+        # since we don't know the file extension for the podcast, use a wildcard to match any podcast with the title and use the first result
+        local_podcast_files = glob.glob(os.path.join(full_podcast_dir, filename) + ".*")
+        if len(local_podcast_files) > 0:
+            full_filename = os.path.basename(local_podcast_files[0])
+            log.info(f"A copy of {title} has already been downloaded to the server ({full_filename}) and will be used for this podcast")
+            url = f"http://{local_ip}:{local_port}/{podcast_dir}/{full_filename}"
+            log.info(f"Using a locally-hosted URL for this podcast: {url}")
+            return url
+
     # in a previous version of this logic, a HEAD request was used but some servers did not redirect properly unless a GET was sent
     with requests.get(url, allow_redirects=False, stream=True, headers={'Range': 'bytes=0-', 'User-Agent': USER_AGENT}) as response:
         if response.is_redirect:
             redirected_url = response.headers['Location']
             log.info(f"Redirected {url} to {redirected_url}")
-            return final_redirect_url(redirected_url, title, podcast_title, local_ip, local_port, local_download_dir)
+            return final_redirect_url(redirected_url, title, podcast_title, local_ip, local_port, local_download_dir, False)
         elif response.ok:
             log.info(f"Final URL for this podcast: {url}")
 
@@ -129,23 +145,27 @@ def final_redirect_url(url, title, podcast_title, local_ip, local_port, local_do
                 file_ext = os.path.splitext(parsed_url.path)[1]
                 if file_ext != '' and local_ip and local_port and local_download_dir:
                     # get a valid file path for the file as it will be downloaded locally to this server
-                    podcast_dir = slugify(podcast_title)
-                    filename = f'{slugify(title)}{file_ext}'
-                    file_dir = os.path.join(local_download_dir, podcast_dir)
-                    full_file_path = os.path.join(file_dir, filename)
+                    if not check_for_local_download:
+                        podcast_dir = slugify(podcast_title)
+                        full_podcast_dir = os.path.join(local_download_dir, podcast_dir)
+                        filename = slugify(title)
+                        
+                    full_filename = f'{filename}{file_ext}'
+                    full_file_path = os.path.join(full_podcast_dir, full_filename)
                     if not os.path.exists(full_file_path):
                         # since the file does not exist locally, download it now
-                        os.makedirs(file_dir, exist_ok=True)
+                        os.makedirs(full_podcast_dir, exist_ok=True)
                         log.info(f"Downloading podcast to {full_file_path} from {url}")
                         if write_bytes(url, response, full_file_path):
-                            log.info(f"Successfully downloaded {filename}")
+                            log.info(f"Successfully downloaded {full_filename}")
                         else:
-                            log.error(f"Error downloading {filename}")
+                            log.error(f"Error downloading {full_filename}")
                             os.remove(full_file_path)
                             return ""
 
                     # create the URL that will be used to host this podcast file
-                    url = f"http://{local_ip}:{local_port}/{podcast_dir}/{filename}"
+                    url = f"http://{local_ip}:{local_port}/{podcast_dir}/{full_filename}"
+                    log.info(f"Using a locally-hosted URL for this podcast: {url}")
             return url
         else:
             log.error(f"Error trying to determine the final URL for podcast: {response}")
