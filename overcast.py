@@ -16,7 +16,7 @@ log = logging.getLogger('overcast-sonos')
 UNPLAYED_EPISODE_PREFIX = '* '
 EPISODE_CACHE_SIZE = 5
 HOSTNAME = "https://overcast.fm"
-KNOWN_DURATIONS = {"Scorchin’ Radio": 3600}
+KNOWN_DURATIONS = {"Scorchin’ Radio": 3600, "Enhanced Sessions": 7260}
 
 class Overcast(object):
     def __init__(self, email, password):
